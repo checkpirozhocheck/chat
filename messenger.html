@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Мессенджер</title>
+<script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Unbounded:wght@700&display=swap');
+  :root{--bg:#0a0a0f;--s:#111118;--s2:#1a1a24;--b:#2a2a3a;--a:#7c6af7;--a2:#a78bfa;--g:#4ade80;--r:#f87171;--t:#e8e8f0;--m:#6b6b80;--me:#1e1a3f;--th:#1a1a24}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--t);height:100vh;overflow:hidden;display:flex;flex-direction:column}
+  body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(124,106,247,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(124,106,247,.04) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+  #setup{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:20px}
+  .box{width:100%;max-width:380px}
+  .logo{font-family:'Unbounded',sans-serif;font-size:24px;font-weight:700;letter-spacing:-1px;margin-bottom:4px;background:linear-gradient(135deg,var(--a),var(--a2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .sub{font-size:10px;color:var(--m);letter-spacing:3px;text-transform:uppercase;margin-bottom:24px}
+  .lbl{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--m);margin-bottom:6px}
+  .inp{width:100%;background:var(--s);border:1px solid var(--b);border-radius:8px;color:var(--t);font-family:'JetBrains Mono',monospace;font-size:14px;padding:11px 14px;outline:none;transition:border-color .2s;margin-bottom:14px}
+  .inp:focus{border-color:var(--a)}
+  .inp.big{text-align:center;font-size:22px;letter-spacing:6px;font-family:'Unbounded',sans-serif;font-weight:700}
+  .btn{width:100%;padding:13px;border:none;border-radius:8px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;background:var(--a);color:#fff;transition:all .2s}
+  .btn:hover:not(:disabled){background:var(--a2)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .stline{font-size:11px;color:var(--m);margin-top:11px;display:flex;align-items:center;gap:7px;min-height:18px}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--m);flex-shrink:0}
+  .dot.g{background:var(--g);animation:bl 2s infinite}
+  .dot.y{background:#fbbf24;animation:bl .7s infinite}
+  .dot.r{background:var(--r)}
+  @keyframes bl{0%,100%{opacity:1}50%{opacity:.2}}
+  #chat{display:none;flex-direction:column;height:100vh;z-index:1}
+  #chat.on{display:flex}
+  .hdr{padding:13px 18px;border-bottom:1px solid var(--b);background:rgba(17,17,24,.97);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+  .pi{display:flex;align-items:center;gap:10px}
+  .av{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--a),#4f46e5);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff;font-family:'Unbounded',sans-serif}
+  .pn{font-size:14px;font-weight:500}
+  .ps{font-size:10px;color:var(--m)}
+  .bdg{font-size:10px;padding:4px 10px;border-radius:20px;display:flex;align-items:center;gap:5px}
+  .bdg.on{background:rgba(74,222,128,.1);color:var(--g);border:1px solid rgba(74,222,128,.2)}
+  .bdg.off{background:rgba(248,113,113,.1);color:var(--r);border:1px solid rgba(248,113,113,.2)}
+  #msgs{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:5px;scroll-behavior:smooth}
+  #msgs::-webkit-scrollbar{width:3px}
+  #msgs::-webkit-scrollbar-thumb{background:var(--b);border-radius:2px}
+  .mw{display:flex;flex-direction:column;max-width:72%;animation:fu .15s ease}
+  @keyframes fu{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+  .mw.me{align-self:flex-end;align-items:flex-end}
+  .mw.them{align-self:flex-start;align-items:flex-start}
+  .bub{padding:9px 13px;border-radius:13px;font-size:14px;line-height:1.5;word-break:break-word}
+  .mw.me .bub{background:var(--me);border:1px solid rgba(124,106,247,.3);border-bottom-right-radius:3px;color:#d4d4f0}
+  .mw.them .bub{background:var(--th);border:1px solid var(--b);border-bottom-left-radius:3px}
+  .mt{font-size:10px;color:var(--m);margin-top:3px}
+  .sys{align-self:center;font-size:10px;color:var(--m);background:var(--s);border:1px solid var(--b);padding:3px 10px;border-radius:20px;margin:4px 0}
+  .ia{padding:12px 14px;border-top:1px solid var(--b);background:rgba(17,17,24,.97);display:flex;gap:8px;align-items:flex-end;flex-shrink:0}
+  #mi{flex:1;background:var(--s2);border:1px solid var(--b);border-radius:11px;color:var(--t);font-family:'JetBrains Mono',monospace;font-size:14px;padding:10px 14px;outline:none;resize:none;max-height:120px;line-height:1.5;transition:border-color .2s}
+  #mi:focus{border-color:var(--a)}
+  #mi::placeholder{color:var(--m)}
+  #sb{width:42px;height:42px;border-radius:11px;border:none;background:var(--a);color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
+  #sb:hover{background:var(--a2)}
+  .toast{position:fixed;bottom:70px;left:50%;transform:translateX(-50%) translateY(8px);background:var(--s2);border:1px solid var(--a);color:var(--a);padding:7px 16px;border-radius:20px;font-size:12px;opacity:0;transition:all .25s;pointer-events:none;z-index:300;white-space:nowrap}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<div id="setup">
+  <div class="box">
+    <div class="logo">NEXUS</div>
+    <div class="sub">Мессенджер</div>
+
+    <div class="lbl">Ваш никнейм</div>
+    <input id="nick" class="inp" placeholder="Введите никнейм..." maxlength="20"
+      onkeydown="if(event.key==='Enter')document.getElementById('room').focus()">
+
+    <div class="lbl">Код комнаты — придумайте любой, скажите другу</div>
+    <input id="room" class="inp big" placeholder="ROOM" maxlength="16"
+      oninput="this.value=this.value.toUpperCase().replace(/\s/g,'')"
+      onkeydown="if(event.key==='Enter')goChat()">
+
+    <button class="btn" id="gobtn" onclick="goChat()">Войти в чат &rarr;</button>
+
+    <div class="stline">
+      <span class="dot y" id="sdot"></span>
+      <span id="stxt">Введите данные и нажмите войти</span>
+    </div>
+  </div>
+</div>
+
+<div id="chat">
+  <div class="hdr">
+    <div class="pi">
+      <div class="av" id="pav">?</div>
+      <div>
+        <div class="pn" id="pname">Комната</div>
+        <div class="ps" id="psub"></div>
+      </div>
+    </div>
+    <div class="bdg on" id="bdg"><span class="dot g"></span>&nbsp;Online</div>
+  </div>
+  <div id="msgs"></div>
+  <div class="ia">
+    <textarea id="mi" rows="1" placeholder="Сообщение..."
+      oninput="ar(this)"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg()}"></textarea>
+    <button id="sb" onclick="sendMsg()">&#10148;</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var ABLY_KEY = 'vwcznQ.DB89EA:BxoDDt5xukTsUXEYO2BbWYuTRcptwz3ukeg1xvQt8TM';
+var myName = '', roomId = '', channel;
+
+function goChat(){
+  myName = document.getElementById('nick').value.trim();
+  roomId = document.getElementById('room').value.trim();
+  if(!myName){ toast('Введите никнейм'); return; }
+  if(!roomId){ toast('Введите код комнаты'); return; }
+
+  var btn = document.getElementById('gobtn');
+  btn.disabled = true;
+  btn.textContent = 'Подключаемся...';
+  setS('y', 'Подключаемся...');
+
+  try {
+    var ably = new Ably.Realtime({ key: ABLY_KEY, clientId: myName });
+
+    ably.connection.on('connected', function(){
+      channel = ably.channels.get('room-' + roomId);
+      channel.subscribe('msg', function(msg){
+        var d = msg.data;
+        if(d.from === myName) return;
+        addMsg(d.text, 'them', d.from, d.time);
+      });
+      openChat();
+    });
+
+    ably.connection.on('failed', function(){
+      setS('r', 'Не удалось подключиться');
+      btn.disabled = false;
+      btn.textContent = 'Войти в чат →';
+    });
+
+    ably.connection.on('disconnected', function(){
+      setBdg(false);
+    });
+
+    ably.connection.on('connected', function(){
+      setBdg(true);
+    });
+
+  } catch(e){
+    setS('r', 'Ошибка: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = 'Войти в чат →';
+  }
+}
+
+function openChat(){
+  document.getElementById('setup').style.display = 'none';
+  document.getElementById('chat').classList.add('on');
+  document.getElementById('pname').textContent = roomId;
+  document.getElementById('psub').textContent  = 'вы: ' + myName;
+  document.getElementById('pav').textContent   = roomId[0];
+  setBdg(true);
+  sys('Вы в комнате ' + roomId);
+  document.getElementById('mi').focus();
+}
+
+function sendMsg(){
+  var inp = document.getElementById('mi');
+  var txt = inp.value.trim();
+  if(!txt) return;
+  if(!channel){ toast('Нет соединения'); return; }
+  var t = now();
+  channel.publish('msg', { from: myName, text: txt, time: t });
+  addMsg(txt, 'me', myName, t);
+  inp.value = '';
+  inp.style.height = 'auto';
+}
+
+function addMsg(text, who, name, time){
+  var m = document.getElementById('msgs');
+  var w = document.createElement('div');
+  w.className = 'mw ' + who;
+  w.innerHTML = '<div class="bub">' + esc(text) + '</div><div class="mt">' + esc(name) + ' · ' + time + '</div>';
+  m.appendChild(w);
+  m.scrollTop = m.scrollHeight;
+}
+
+function sys(text){
+  var m = document.getElementById('msgs');
+  var el = document.createElement('div');
+  el.className = 'sys';
+  el.textContent = text;
+  m.appendChild(el);
+  m.scrollTop = m.scrollHeight;
+}
+
+function setBdg(on){
+  var b = document.getElementById('bdg');
+  b.className = 'bdg ' + (on ? 'on' : 'off');
+  b.innerHTML = on ? '<span class="dot g"></span>&nbsp;Online' : '<span class="dot r"></span>&nbsp;Offline';
+}
+
+function setS(col, txt){
+  var d = document.getElementById('sdot');
+  var t = document.getElementById('stxt');
+  if(d) d.className = 'dot ' + col;
+  if(t) t.textContent = txt;
+}
+
+function toast(msg){
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._t);
+  t._t = setTimeout(function(){ t.classList.remove('show'); }, 2500);
+}
+
+function ar(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,120)+'px'; }
+function now(){ return new Date().toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'}); }
+function esc(t){ return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>'); }
+</script>
+</body>
+</html>
